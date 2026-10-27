@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <title>OLED Attendance Tracker</title>
+    <style>
+        :root {
+            --bg-color: #000000;
+            --card-bg: #1c1c1e;
+            --card-border: #2c2c2e;
+            --text-primary: #ffffff;
+            --text-secondary: #8e8e93;
+            --accent-green: #30D158;
+            --accent-red: #FF453A;
+            --button-bg: #2c2c2e;
+            --button-active: #3a3a3c;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; -webkit-tap-highlight-color: transparent; }
+        body { background-color: var(--bg-color); color: var(--text-primary); padding: 16px; max-width: 600px; margin: 0 auto; padding-bottom: 60px; }
+        
+        header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; padding-top: 10px; }
+        h1 { font-size: 24px; font-weight: 700; letter-spacing: -0.5px; }
+        
+        .top-actions { display: flex; gap: 8px; }
+        .btn { background: var(--button-bg); color: var(--text-primary); border: none; padding: 8px 14px; border-radius: 12px; font-size: 14px; font-weight: 600; cursor: pointer; transition: background 0.2s; }
+        .btn:active { background: var(--button-active); transform: scale(0.96); }
+        .btn-primary { background: #0A84FF; color: white; }
+
+        .filters { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 10px; margin-bottom: 16px; scrollbar-width: none; }
+        .filters::-webkit-scrollbar { display: none; }
+        .filter-chip { background: var(--card-bg); color: var(--text-secondary); border: 1px solid var(--card-border); padding: 6px 14px; border-radius: 20px; font-size: 13px; font-weight: 500; white-space: nowrap; cursor: pointer; }
+        .filter-chip.active { background: var(--text-primary); color: var(--bg-color); border-color: var(--text-primary); }
+
+        .subject-card { background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 20px; padding: 16px; margin-bottom: 14px; display: flex; flex-direction: column; gap: 12px; position: relative; transition: border-color 0.3s; }
+        .card-header { display: flex; justify-content: space-between; align-items: flex-start; }
+        .subject-title { font-size: 18px; font-weight: 600; letter-spacing: -0.3px; }
+        .category-tag { font-size: 11px; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px; margin-top: 2px; }
+        
+        .card-body { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+        .stats-col { display: flex; flex-direction: column; gap: 4px; flex-grow: 1; }
+        .stat-text { font-size: 13px; color: var(--text-secondary); }
+        .stat-val { color: var(--text-primary); font-weight: 600; }
+        .margin-text { font-size: 12px; font-weight: 500; margin-top: 4px; }
+        
+        .donut-container { position: relative; width: 72px; height: 72px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; }
+        .donut-svg { width: 72px; height: 72px; transform: rotate(-90deg); }
+        .donut-bg { fill: none; stroke: #2c2c2e; stroke-width: 8; }
+        .donut-fill { fill: none; stroke-width: 8; stroke-linecap: round; transition: stroke-dashoffset 0.5s ease, stroke 0.3s ease; }
+        .donut-center { position: absolute; display: flex; flex-direction: column; align-items: center; justify-content: center; font-size: 13px; font-weight: 700; }
+
+        .actions-row { display: flex; gap: 8px; align-items: center; }
+        .btn-yes { background: rgba(48, 209, 88, 0.15); color: var(--accent-green); border: 1px solid rgba(48, 209, 88, 0.3); flex: 1; padding: 10px; border-radius: 12px; font-weight: 600; font-size: 14px; cursor: pointer; }
+        .btn-yes:active { background: rgba(48, 209, 88, 0.3); }
+        .btn-no { background: rgba(255, 69, 58, 0.15); color: var(--accent-red); border: 1px solid rgba(255, 69, 58, 0.3); flex: 1; padding: 10px; border-radius: 12px; font-weight: 600; font-size: 14px; cursor: pointer; }
+        .btn-no:active { background: rgba(255, 69, 58, 0.3); }
+        .btn-undo { background: var(--button-bg); color: var(--text-secondary); border: 1px solid var(--card-border); padding: 10px 14px; border-radius: 12px; font-size: 13px; cursor: pointer; }
+
+        .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); backdrop-filter: blur(10px); z-index: 100; align-items: center; justify-content: center; padding: 20px; }
+        .modal.active { display: flex; }
+        .modal-content { background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 24px; width: 100%; max-width: 400px; padding: 24px; display: flex; flex-direction: column; gap: 16px; }
+        .modal-title { font-size: 20px; font-weight: 600; }
+        .form-group { display: flex; flex-direction: column; gap: 6px; }
+        .form-label { font-size: 13px; color: var(--text-secondary); }
+        .form-input { background: #000000; border: 1px solid var(--card-border); color: white; padding: 12px; border-radius: 12px; font-size: 16px; outline: none; }
+        .modal-actions { display: flex; gap: 10px; margin-top: 8px; }
+
+        .target-edit { font-size: 11px; color: var(--text-secondary); cursor: pointer; text-decoration: underline; background: none; border: none; padding: 0; text-align: left; margin-top: 2px; }
+    </style>
+</head>
+<body>
+
+    <header>
+        <h1>Attendance</h1>
+        <div class="top-actions">
+            <button class="btn" onclick="openAddModal()">+ Subject</button>
+            <button class="btn" onclick="resetAllData()" style="color: var(--accent-red);">Reset</button>
+        </div>
+    </header>
+
+    <div class="filters" id="filterContainer">
+        <div class="filter-chip active" onclick="setFilter('All', this)">All</div>
+        <div class="filter-chip" onclick="setFilter('Theory', this)">Theory</div>
+        <div class="filter-chip" onclick="setFilter('Practical', this)">Practical</div>
+        <div class="filter-chip" onclick="setFilter('Posting', this)">Posting</div>
+    </div>
+
+    <div id="subjectList"></div>
+
+    <!-- Add Subject Modal -->
+    <div class="modal" id="addModal">
+        <div class="modal-content">
+            <div class="modal-title">Add New Subject</div>
+            <div class="form-group">
+                <span class="form-label">Subject Name</span>
+                <input type="text" id="newSubName" class="form-input" placeholder="e.g. Pharmacology">
+            </div>
+            <div class="form-group">
+                <span class="form-label">Category</span>
+                <select id="newSubCat" class="form-input">
+                    <option value="Theory">Theory</option>
+                    <option value="Practical">Practical</option>
+                    <option value="Posting">Posting</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <span class="form-label">Target Attendance (%)</span>
+                <input type="number" id="newSubTarget" class="form-input" value="75" min="1" max="100">
+            </div>
+            <div class="form-group">
+                <span class="form-label">Initial Classes Attended (if mid-sem)</span>
+                <input type="number" id="newSubAttended" class="form-input" value="0" min="0">
+            </div>
+            <div class="form-group">
+                <span class="form-label">Initial Total Classes (if mid-sem)</span>
+                <input type="number" id="newSubTotal" class="form-input" value="0" min="0">
+            </div>
+            <div class="modal-actions">
+                <button class="btn" style="flex: 1;" onclick="closeAddModal()">Cancel</button>
+                <button class="btn btn-primary" style="flex: 1;" onclick="saveNewSubject()">Add Subject</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const DEFAULT_SUBJECTS = [
+            { id: 1, name: "General Medicine - Theory", category: "Theory", attended: 22, total: 28, target: 75, history: [] },
+            { id: 2, name: "General Surgery - Theory", category: "Theory", attended: 19, total: 26, target: 75, history: [] },
+            { id: 3, name: "Obstetrics & Gynecology", category: "Theory", attended: 24, total: 28, target: 80, history: [] },
+            { id: 4, name: "Pediatrics", category: "Theory", attended: 15, total: 22, target: 75, history: [] },
+            { id: 5, name: "Orthopedics", category: "Theory", attended: 12, total: 18, target: 75, history: [] },
+            { id: 6, name: "Ophthalmology", category: "Theory", attended: 14, total: 16, target: 75, history: [] },
+            { id: 7, name: "Otolaryngology (ENT)", category: "Theory", attended: 13, total: 18, target: 75, history: [] },
+            { id: 8, name: "Community Medicine (PSM)", category: "Theory", attended: 25, total: 30, target: 80, history: [] },
+            { id: 9, name: "Pharmacology", category: "Theory", attended: 30, total: 35, target: 75, history: [] },
+            { id: 10, name: "Pathology", category: "Theory", attended: 28, total: 32, target: 75, history: [] },
+            { id: 11, name: "Medicine Ward Posting", category: "Posting", attended: 18, total: 20, target: 85, history: [] },
+            { id: 12, name: "Surgery Ward Posting", category: "Posting", attended: 16, total: 20, target: 85, history: [] },
+            { id: 13, name: "OBG Clinicals", category: "Practical", attended: 14, total: 15, target: 80, history: [] },
+            { id: 14, name: "Pediatrics Clinicals", category: "Practical", attended: 12, total: 15, target: 80, history: [] },
+            { id: 15, name: "Community Medicine Field Visit", category: "Practical", attended: 10, total: 12, target: 75, history: [] }
+        ];
+
+        let subjects = JSON.parse(localStorage.getItem('oled_attendance_subjects')) || DEFAULT_SUBJECTS;
+        let currentFilter = 'All';
+
+        function saveData() {
+            localStorage.setItem('oled_attendance_subjects', JSON.stringify(subjects));
+            renderApp();
+        }
+
+        function setFilter(cat, el) {
+            currentFilter = cat;
+            document.querySelectorAll('.filter-chip').forEach(c => c.classList.remove('active'));
+            el.classList.add('active');
+            renderApp();
+        }
+
+        function markAttendance(id, present) {
+            const sub = subjects.find(s => s.id === id);
+            if (!sub) return;
+            sub.history.push({ attended: sub.attended, total: sub.total });
+            sub.total += 1;
+            if (present) sub.attended += 1;
+            saveData();
+        }
+
+        function undoAttendance(id) {
+            const sub = subjects.find(s => s.id === id);
+            if (!sub || sub.history.length === 0) return;
+            const last = sub.history.pop();
+            sub.attended = last.attended;
+            sub.total = last.total;
+            saveData();
+        }
+
+        function updateTarget(id) {
+            const sub = subjects.find(s => s.id === id);
+            if (!sub) return;
+            const newT = prompt(`Enter new target percentage for ${sub.name}:`, sub.target);
+            if (newT !== null && !isNaN(newT) && newT > 0 && newT <= 100) {
+                sub.target = parseInt(newT);
+                saveData();
+            }
+        }
+
+        function renderApp() {
+            const listEl = document.getElementById('subjectList');
+            listEl.innerHTML = '';
+
+            const filtered = currentFilter === 'All' ? subjects : subjects.filter(s => s.category === currentFilter);
+
+            if (filtered.length === 0) {
+                listEl.innerHTML = `<div style="text-align:center; color: var(--text-secondary); padding: 40px;">No subjects found.</div>`;
+                return;
+            }
+
+            filtered.forEach(sub => {
+                const pct = sub.total === 0 ? 0 : Math.round((sub.attended / sub.total) * 100);
+                const isSafe = pct >= sub.target;
+                const color = isSafe ? 'var(--accent-green)' : 'var(--accent-red)';
+                
+                // Donut math
+                const radius = 28;
+                const circ = 2 * Math.PI * radius;
+                const offset = circ - (pct / 100) * circ;
+
+                // Smart margin calculation
+                let marginHtml = '';
+                if (sub.total === 0) {
+                    marginHtml = `<span style="color: var(--text-secondary)">No classes logged yet</span>`;
+                } else if (isSafe) {
+                    // Safe to miss: how many can we miss while keeping pct >= target?
+                    // (attended) / (total + x) >= target/100
+                    let x = 0;
+                    while ((sub.attended / (sub.total + x + 1)) >= (sub.target / 100)) {
+                        x++;
+                    }
+                    if (x > 0) {
+                        marginHtml = `<span style="color: var(--accent-green)">Can safely miss ${x} class${x > 1 ? 'es' : ''}</span>`;
+                    } else {
+                        marginHtml = `<span style="color: var(--accent-yellow, #FFD60A)">On threshold limit</span>`;
+                    }
+                } else {
+                    // Need to attend: how many consecutive classes needed?
+                    // (attended + y) / (total + y) >= target/100
+                    let y = 0;
+                    let currAtt = sub.attended;
+                    let currTot = sub.total;
+                    while ((currAtt / currTot) < (sub.target / 100) && y < 500) {
+                        currAtt++;
+                        currTot++;
+                        y++;
+                    }
+                    marginHtml = `<span style="color: var(--accent-red)">Attend next ${y} class${y > 1 ? 'es' : ''}</span>`;
+                }
+
+                const card = document.createElement('div');
+                card.className = 'subject-card';
+                card.style.borderColor = isSafe ? 'rgba(48,209,88,0.2)' : 'rgba(255,69,58,0.3)';
+                
+                card.innerHTML = `
+                    <div class="card-header">
+                        <div>
+                            <div class="subject-title">${sub.name}</div>
+                            <div class="category-tag">${sub.category}</div>
+                        </div>
+                        <button class="target-edit" onclick="updateTarget(${sub.id})">Target: ${sub.target}%</button>
+                    </div>
+                    <div class="card-body">
+                        <div class="stats-col">
+                            <div class="stat-text">Attended: <span class="stat-val">${sub.attended} / ${sub.total}</span></div>
+                            <div class="margin-text">${marginHtml}</div>
+                        </div>
+                        <div class="donut-container">
+                            <svg class="donut-svg" viewBox="0 0 72 72">
+                                <circle class="donut-bg" cx="36" cy="36" r="${radius}"></circle>
+                                <circle class="donut-fill" cx="36" cy="36" r="${radius}" 
+                                    style="stroke: ${color}; stroke-dasharray: ${circ}; stroke-dashoffset: ${offset};">
+                                </circle>
+                            </svg>
+                            <div class="donut-center" style="color: ${color};">${pct}%</div>
+                        </div>
+                    </div>
+                    <div class="actions-row">
+                        <button class="btn-yes" onclick="markAttendance(${sub.id}, true)">Yes (Present)</button>
+                        <button class="btn-no" onclick="markAttendance(${sub.id}, false)">No (Absent)</button>
+                        ${sub.history.length > 0 ? `<button class="btn-undo" onclick="undoAttendance(${sub.id})">Undo</button>` : ''}
+                    </div>
+                `;
+                listEl.appendChild(card);
+            });
+        }
+
+        function openAddModal() { document.getElementById('addModal').classList.add('active'); }
+        function closeAddModal() { document.getElementById('addModal').classList.remove('active'); }
+
+        function saveNewSubject() {
+            const name = document.getElementById('newSubName').value.trim();
+            const category = document.getElementById('newSubCat').value;
+            const target = parseInt(document.getElementById('newSubTarget').value) || 75;
+            const attended = parseInt(document.getElementById('newSubAttended').value) || 0;
+            const total = parseInt(document.getElementById('newSubTotal').value) || 0;
+
+            if (!name) { alert('Please enter a subject name'); return; }
+            if (attended > total) { alert('Attended cannot be greater than total classes'); return; }
+
+            subjects.push({
+                id: Date.now(),
+                name,
+                category,
+                attended,
+                total: Math.max(attended, total),
+                target,
+                history: []
+            });
+
+            closeAddModal();
+            document.getElementById('newSubName').value = '';
+            document.getElementById('newSubAttended').value = '0';
+            document.getElementById('newSubTotal').value = '0';
+            saveData();
+        }
+
+        function resetAllData() {
+            if (confirm('Reset all attendance data back to default subjects?')) {
+                subjects = JSON.parse(JSON.stringify(DEFAULT_SUBJECTS));
+                saveData();
+            }
+        }
+
+        renderApp();
+    </script>
+</body>
+</html>
